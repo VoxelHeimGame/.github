@@ -1,260 +1,170 @@
-# 🌍 **VoxelHeim MMORPG Project** 🎮
+# 🌍 VoxelHeim MMORPG Project 🎮
 
 ## 📋 Project Overview
 
-**VoxelHeim** is an ambitious, open-source MMORPG project designed for web browsers. Our goal is to create a highly scalable, performant, and engaging multiplayer experience using modern web technologies and self-hosted infrastructure. This document provides a comprehensive overview of our architecture, technology choices, and development practices.
+VoxelHeim is an ambitious, open-source MMORPG project designed for web browsers. Our goal is to create a highly scalable, performant, and engaging multiplayer experience using modern web technologies and self-hosted infrastructure.
 
----
+## 🏗️ Infrastructure and Environment Management
+
+### Environments
+
+We maintain several environments to ensure smooth development, testing, and deployment:
+
+1. **DEV**: Personal development environment for developers
+2. **TEST**: Internal testing environment for developers and QA
+3. **PTU (Public Test Universe)**: Public testing environment
+4. **LIVE**: Production environment
+
+### Development Workflow
+
+1. Developers work in their personal **DEV** environment
+2. Changes are pushed to the **TEST** environment for internal testing
+3. Approved changes move to **PTU** for public testing
+4. Finally, tested and approved changes are deployed to the **LIVE** environment
+
+### ArgoCD for Deployment Management
+
+We use ArgoCD for managing deployments across our environments:
+
+- **Repository**: `voxelheim-infrastructure/argocd-configs/`
+- **Purpose**: Automate deployments and ensure consistency across environments
+- **Features**:
+  - GitOps workflow
+  - Automatic synchronization of Kubernetes manifests
+  - Rollback capabilities
+  - Multi-cluster support
+
+#### ArgoCD Setup
+
+1. Install ArgoCD in your Kubernetes cluster
+2. Configure ArgoCD to watch your infrastructure repository
+3. Define Application resources for each service and environment
+
+Example ArgoCD Application for the auth service in the TEST environment:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: auth-service-test
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/VoxelHeim/voxelheim-infrastructure.git
+    targetRevision: HEAD
+    path: kubernetes-configs/test/auth-service
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: voxelheim-test
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
+### Developer Environment Setup
+
+To set up a personal development environment:
+
+1. Clone the necessary repositories
+2. Use `docker-compose` for local development:
+   ```bash
+   cd voxelheim-infrastructure/docker-compose
+   docker-compose up -d
+   ```
+3. For database management:
+   - Use the provided scripts in `voxelheim-infrastructure/scripts/` to create and manage database dumps
+   - Example: `./create_db_dump.sh dev` to create a dump of the DEV environment database
+
+### Database Management
+
+- Use Kubernetes CronJobs to schedule regular database backups
+- Store database dumps in MinIO for easy access and management
+- Provide scripts for developers to easily import database dumps into their local environment
+
+Example script to import a database dump:
+
+```bash
+#!/bin/bash
+# Import database dump
+ENV=$1
+DUMP_FILE=$2
+
+if [ "$ENV" = "dev" ]; then
+  docker-compose exec postgres psql -U postgres -d voxelheim < $DUMP_FILE
+else
+  kubectl exec -it $(kubectl get pods -l app=postgres -o jsonpath="{.items[0].metadata.name}" -n voxelheim-$ENV) -- psql -U postgres -d voxelheim < $DUMP_FILE
+fi
+```
 
 ## 📂 GitHub Organization Structure
 
-Our project is organized into the following repositories within the **VoxelHeim** GitHub organization:
+Our project is organized into the following repositories within the VoxelHeim GitHub organization:
 
-- **voxelheim-client**
-- **voxelheim-auth-service**
-- **voxelheim-world-service**
-- **voxelheim-player-service**
-- **voxelheim-combat-service**
-- **voxelheim-inventory-service**
-- **voxelheim-chat-service**
-- **voxelheim-analytics-service**
-- **voxelheim-admin-panel**
-- **voxelheim-assets-service**
-- **voxelheim-infra-admin**
-- **voxelheim-monitoring**
-- **voxelheim-infrastructure**
-  - **kubernetes-configs**
-  - **terraform-modules**
-  - **docker-compose**
-- **voxelheim-docs**
+- voxelheim-client
+- voxelheim-auth-service
+- voxelheim-world-service
+- voxelheim-player-service
+- voxelheim-combat-service
+- voxelheim-inventory-service
+- voxelheim-chat-service
+- voxelheim-analytics-service
+- voxelheim-admin-panel
+- voxelheim-assets-service
+- voxelheim-infra-admin
+- voxelheim-monitoring
+- voxelheim-infrastructure
+  - kubernetes-configs
+  - terraform-modules
+  - docker-compose
+  - argocd-configs
+- voxelheim-docs
 
-Each repository has its own project board for task management, accessible at: [Project Boards](https://github.com/VoxelHeim/<repo-name>/projects).
+## ⚙️ Core Components and Technologies
 
----
+- **Frontend**: SolidJS, Three.js, TypeScript
+- **Backend**: Node.js, TypeScript
+- **Databases**: PostgreSQL + Citus, ClickHouse
+- **Caching**: DragonFly DB
+- **Message Queue**: RabbitMQ
+- **Infrastructure**: Kubernetes, Docker, Terraform, ArgoCD
+- **API Gateway**: Traefik
+- **Monitoring**: Prometheus, Grafana, ELK Stack
 
-## ⚙️ Core Components and Projects
-
-### 1. **Client: "voxelheim-client"** 🖥️
-
-- **Technologies:** SolidJS, Three.js, TypeScript
-- **Purpose:** Renders the game world, handles user input, and communicates with the server.
-
-  **Key Features:**
-  - 3D rendering using Three.js 🌐
-  - State management with SolidJS 🔄
-  - WebSocket communication for real-time updates 🔌
-
-  [Project Board](https://github.com/VoxelHeim/voxelheim-client/projects)
-
----
-
-### 2. **Game Services** ⚔️
-
-All game services are built using **Node.js** and **TypeScript**, designed to be stateless for horizontal scalability.
-
-- **voxelheim-auth-service:** Authentication service 🔐
-- **voxelheim-world-service:** World management service 🌎
-- **voxelheim-player-service:** Player data service 👾
-- **voxelheim-combat-service:** Combat system service ⚔️
-- **voxelheim-inventory-service:** Inventory management service 🎒
-- **voxelheim-chat-service:** Chat system service 💬
-
-Each service has its own project board at: [Service Project Boards](https://github.com/VoxelHeim/<service-name>/projects)
-
----
-
-### 3. **Support Services** 🛠️
-
-- **voxelheim-analytics-service:** Game analytics service 📊
-- **voxelheim-admin-panel:** Game administration panel 🛡️
-- **voxelheim-assets-service:** Asset management service 🗃️
-
----
-
-### 4. **Infrastructure Services** 🏗️
-
-- **voxelheim-infra-admin:** Infrastructure administration panel 🖥️
-- **voxelheim-monitoring:** Monitoring and alerting service 🚨
-
----
-
-### 5. **Databases** 🗃️
-
-- **Game DB:** PostgreSQL + Citus (for game state, player data, inventory, etc.)
-  - Scaled horizontally for high write throughput 💥
-
-- **Auth DB:** PostgreSQL + Citus (separate cluster for authentication data)
-  - Optimized for read-heavy operations 📚
-
-- **Analytics DB:** ClickHouse (for analytical queries on large datasets)
-  - Optimized for analyzing game events, player behavior, and system performance 📈
-
----
-
-Documentation Links:
-- [PostgreSQL Docs](https://www.postgresql.org/docs/)
-- [Citus Docs](https://docs.citusdata.com/)
-- [ClickHouse Docs](https://clickhouse.com/docs/)
-
----
-
-### 6. **Infrastructure** 🏠
-
-- **Kubernetes:** Orchestrates all services and databases 🚢
-- **NGINX:** Acts as a reverse proxy and load balancer 🔄
-- **Traefik:** API Gateway for routing requests 🔀
-- **DragonFly DB:** In-memory caching for frequently accessed data ⚡
-- **RabbitMQ:** Messaging between services 📬
-- **MinIO:** Stores large binary objects (game assets) 📦
-- **Prometheus, Grafana, and ELK Stack:** Monitoring, alerting, and log management 📊
-- **Terraform:** Infrastructure as code management 🛠️
-
-Documentation Links:
-- [Kubernetes Docs](https://kubernetes.io/docs/)
-- [NGINX Docs](https://nginx.org/en/docs/)
-- [Traefik Docs](https://doc.traefik.io/traefik/)
-- [DragonFly DB Docs](https://dragonflydb.io/docs)
-- [RabbitMQ Docs](https://www.rabbitmq.com/documentation.html)
-- [MinIO Docs](https://min.io/docs/minio/linux/index.html)
-- [Prometheus Docs](https://prometheus.io/docs/)
-- [Grafana Docs](https://grafana.com/docs/)
-- [ELK Stack Docs](https://www.elastic.co/guide/index.html)
-- [Terraform Docs](https://developer.hashicorp.com/terraform/docs)
-
----
-
-## 🛠️ Architecture Decisions and Explanations
-
-### Asset Management (voxelheim-assets-service)
-
-- Critical assets are bundled directly into the client for immediate loading.
-- Secondary assets are loaded through the assets service as needed.
-- Implements lazy loading and streaming techniques for 3D assets.
-- Uses a CDN for global asset distribution.
-
-This approach balances initial load time with dynamic content delivery, ensuring a smooth user experience while managing bandwidth efficiently.
+## 🛠️ Architecture Decisions
 
 ### Databases
 
-We use PostgreSQL with Citus extension for both the game and authentication databases, but in separate clusters:
-
-1. **Game DB (PostgreSQL + Citus):**
-   - Handles game state, player data, inventory, etc.
-   - Scaled horizontally for high write throughput.
-   - Citus allows for data sharding across multiple nodes, enabling high performance for a large number of concurrent players.
-
-2. **Auth DB (PostgreSQL + Citus):**
-   - Manages authentication and user account data.
-   - Scaled for read-heavy operations.
-   - Separate from the game DB to isolate sensitive user data and optimize authentication workflows.
-
-3. **Analytics DB (ClickHouse):**
-   - Optimized for analytical queries on large datasets.
-   - Enables real-time analysis of game events, player behavior, and system performance.
+1. **Game DB (PostgreSQL + Citus)**: Handles game state, player data, inventory, etc.
+2. **Auth DB (PostgreSQL + Citus)**: Manages authentication and user account data.
+3. **Analytics DB (ClickHouse)**: Optimized for analytical queries on large datasets.
 
 ### Caching with DragonFly DB
 
-DragonFly DB serves as our distributed caching layer:
-
-- Provides in-memory caching for frequently accessed data, reducing load on main databases.
-- Improves response times for common queries, enhancing overall game performance.
-- Acts as a distributed cache, supporting our microservices architecture.
-- Offers Redis compatibility, allowing easy integration with existing systems and libraries.
-
-Use cases:
-1. Caching player session data for quick access across services.
-2. Storing temporary game state (e.g., player positions) for fast retrieval.
-3. Caching frequently accessed game items or NPCs.
+Provides in-memory caching for frequently accessed data, reducing load on main databases.
 
 ### Messaging System: RabbitMQ
 
-We chose **RabbitMQ** for its:
-
-- Low latency for individual messages, crucial for real-time game events.
-- Better support for complex messaging patterns, allowing flexible communication between services.
-- Ease of setup and maintenance, reducing operational overhead.
-
----
+Chosen for its low latency and support for complex messaging patterns.
 
 ## 🏗️ Infrastructure Setup
 
-### Kubernetes
-
-- Located in `voxelheim-infrastructure/kubernetes-configs/`
-- Includes deployments, services, and ingress configurations for all microservices.
-- Enables easy scaling and management of our containerized services.
-- Provides automatic load balancing and service discovery.
-- Allows for rolling updates and easy rollbacks of services.
-
-Kubernetes is central to our infrastructure, providing:
-1. Orchestration of all our microservices and databases.
-2. Automatic scaling based on load.
-3. Self-healing capabilities (restarting failed containers).
-4. Efficient resource utilization across our cluster.
-
-### Terraform
-
-- Located in `voxelheim-infrastructure/terraform-modules/`
-- Defines and manages cloud resources (e.g., VMs, networks, load balancers).
-- Ensures infrastructure consistency across environments.
-
-### Docker
-
-- `voxelheim-infrastructure/docker-compose/docker-compose.yml` for local development environment.
-- Allows developers to run the entire stack locally for testing and development.
-
-### Database Clusters
-
-- Managed through Kubernetes StatefulSets.
-- Configurations in `voxelheim-infrastructure/kubernetes-configs/databases/`.
-- Ensures data persistence and proper scaling of database clusters.
-
-### Load Balancers
-
-- **NGINX Ingress Controller** for Kubernetes-level load balancing.
-- Cloud-native load balancers (defined in Terraform) for distributing traffic to Kubernetes nodes.
-- Ensures efficient distribution of incoming requests across our services.
-
----
-
-## 🔄 Communication Flow and Examples
-
-### Example 1: Player Combat
-
-When a player attacks another player:
-1. The client sends an attack request to the API Gateway (Traefik).
-2. Traefik routes the request to the Combat Service.
-3. The Combat Service:
-   - Retrieves attacker and defender data from the Player Service.
-   - Calculates damage using combat algorithms.
-   - Updates player health in the Player Service.
-4. Sends combat result to the World Service for broadcasting.
-5. World Service broadcasts the combat result to relevant clients via WebSocket.
-6. The client updates the UI to reflect the combat outcome.
-
-Data flow:
-- Player positions and basic info cached in DragonFly DB for quick access.
-- Combat results stored in Game DB (PostgreSQL + Citus).
-- Combat events logged to ClickHouse for analytics.
-
----
+- **Kubernetes**: Orchestrates all services and databases
+- **Terraform**: Defines and manages cloud resources
+- **Docker**: Used for local development environments
+- **ArgoCD**: Manages deployments across environments
 
 ## 📈 Monitoring & Logging
 
-- **Prometheus** collects metrics on service performance and health.
-- **Grafana** visualizes these metrics for real-time monitoring.
-- **ELK Stack** (Elasticsearch, Logstash, Kibana) for log aggregation, processing, and visualization.
-  - Logs all game events, errors, and user activity.
-  - Provides a centralized place to search, filter, and analyze logs.
-  
----
+- **Prometheus**: Collects metrics on service performance and health
+- **Grafana**: Visualizes these metrics for real-time monitoring
+- **ELK Stack**: Log aggregation, processing, and visualization
 
 ## 📝 Contributing
 
 We welcome contributions from developers! Please refer to our [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to get involved.
 
----
-
 ## 📢 License
 
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for more details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
